@@ -12,6 +12,10 @@ import android.os.PowerManager
 import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat.getSystemService
+import com.google.gson.Gson
+import org.eclipse.paho.client.mqttv3.*
+import org.eclipse.paho.client.mqttv3.persist.MemoryPersistence
+import java.util.*
 
 class MainActivity : Activity(), SensorEventListener {
 
@@ -19,6 +23,9 @@ class MainActivity : Activity(), SensorEventListener {
     private lateinit var powerManager: PowerManager
     private lateinit var wakeLock: PowerManager.WakeLock
     private lateinit var accelerometer: Sensor
+    private lateinit var gyroscope: Sensor
+    private lateinit var heartRate: Sensor
+    private lateinit var mqttClient: MqttClient
     private val frequency = 50 // Set the frequency in Hz
 
     @SuppressLint("InvalidWakeLockTag")
@@ -27,8 +34,8 @@ class MainActivity : Activity(), SensorEventListener {
         setContentView(R.layout.activity_main)
 
         // Initialize sensor and power managers
-        sensorManager = getSystemService(Context.SENSOR_SERVICE) as SensorManager
-        powerManager = getSystemService(Context.POWER_SERVICE) as PowerManager
+        sensorManager = getSystemService(SENSOR_SERVICE) as SensorManager
+        powerManager = getSystemService(POWER_SERVICE) as PowerManager
 
         // Acquire a wake lock to prevent the device from sleeping
         wakeLock = powerManager.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "AccelerometerWakeLock")
@@ -36,7 +43,14 @@ class MainActivity : Activity(), SensorEventListener {
 
         // Get the accelerometer sensor
         accelerometer = sensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER)
+        gyroscope = sensorManager.getDefaultSensor(Sensor.TYPE_GYROSCOPE)
+        heartRate = sensorManager.getDefaultSensor(Sensor.TYPE_HEART_RATE)
+        val brokerUrl = "tcp://cpshealthcare.cl:1883"
+        val clientId = "pixel-watch-client"
+        mqttClient = MqttClient(brokerUrl, clientId, MemoryPersistence())
 
+        val options = MqttConnectOptions()
+        mqttClient.connect(options)
         // Register the sensor listener
         sensorManager.registerListener(this, accelerometer, (1000000 / frequency).toInt())
     }
@@ -61,9 +75,26 @@ class MainActivity : Activity(), SensorEventListener {
         // Update the UI with the accelerometer data
         val accelerometerDataTextView = findViewById<TextView>(R.id.accelerometer_data)
         accelerometerDataTextView.text = "X: $x\nY: $y\nZ: $z"
+        val topic = "stream-ts-epoch"
+        val timestamp = System.currentTimeMillis()
+        val list = arrayListOf(x, y, z)
+        val data = mapOf(
+            "timestamp" to timestamp,
+            "sensor" to "test_ecg",
+            "client_id" to 0,
+            "measures" to list,
+
+        )
+        val json = Gson().toJson(data)
+        val message = "X: $x\nY: $y\nZ: $z"
+
+        mqttClient.publish(topic, json.toByteArray(), 0, false)
     }
 
     override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) {
         // Do nothing
     }
 }
+
+
+
