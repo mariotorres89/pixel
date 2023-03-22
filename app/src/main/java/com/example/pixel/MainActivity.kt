@@ -86,7 +86,6 @@ class MainActivity : Activity(), SensorEventListener {
 
         )
         val json = Gson().toJson(data)
-        val message = "X: $x\nY: $y\nZ: $z"
 
         mqttClient.publish(topic, json.toByteArray(), 0, false)
     }
