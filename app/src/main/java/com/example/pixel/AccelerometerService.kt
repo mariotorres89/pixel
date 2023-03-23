@@ -1,19 +1,18 @@
 package com.example.pixel
 
-import android.app.Service
+import android.app.*
 import android.content.Intent
 import android.hardware.Sensor
 import android.hardware.SensorEvent
 import android.hardware.SensorEventListener
 import android.hardware.SensorManager
-import android.os.Handler
-import android.os.HandlerThread
 import android.os.IBinder
-import android.util.Log
-import android.widget.TextView
 import com.google.gson.Gson
 import org.eclipse.paho.client.mqttv3.*
 import org.eclipse.paho.client.mqttv3.persist.MemoryPersistence
+import android.util.Log
+import androidx.core.app.NotificationCompat
+import android.os.Build
 
 class AccelerometerService : Service(), SensorEventListener {
 
@@ -21,9 +20,8 @@ class AccelerometerService : Service(), SensorEventListener {
     private lateinit var accelerometer: Sensor
     private lateinit var gyroscope: Sensor
     private lateinit var heartRate: Sensor
-    private lateinit var handlerThread: HandlerThread
-    private lateinit var handler: Handler
     private lateinit var mqttClient: MqttClient
+    private val accelerometerData = mutableListOf<FloatArray>()
     private var lastUpdate: Long = 0
     private var lastHrUpdate: Long = 0
 
@@ -48,33 +46,44 @@ class AccelerometerService : Service(), SensorEventListener {
 
         val options = MqttConnectOptions()
         mqttClient.connect(options)
-        handlerThread = HandlerThread("AccelerometerServiceThread")
-        handlerThread.start()
-        handler = Handler(handlerThread.looper)
+        // Register accelerometer sensor listener
+        sensorManager.registerListener(this@AccelerometerService, accelerometer, ACCELEROMETER_RATE)
+
+        // Register gyroscope sensor listener
+        sensorManager.registerListener(this@AccelerometerService, gyroscope, GYROSCOPE_RATE)
+
+        // Register heart rate sensor listener
+        sensorManager.registerListener(this@AccelerometerService, heartRate, HEART_RATE_RATE)
     }
-
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        handler.post(object : Runnable {
-            override fun run() {
-                // Register accelerometer sensor listener
-                sensorManager.registerListener(this@AccelerometerService, accelerometer, ACCELEROMETER_RATE)
+        val channelId = "MyServiceChannelId"
+        val notificationIntent = Intent(this, MainActivity::class.java)
+        val pendingIntent = PendingIntent.getActivity(this, 0, notificationIntent, 0)
 
-                // Register gyroscope sensor listener
-                sensorManager.registerListener(this@AccelerometerService, gyroscope, GYROSCOPE_RATE)
+        // Create the notification channel (for Android 8.0 and above)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val channelName = "My Service Channel"
+            val channel = NotificationChannel(channelId, channelName, NotificationManager.IMPORTANCE_DEFAULT)
+            val notificationManager = getSystemService(NotificationManager::class.java)
+            notificationManager.createNotificationChannel(channel)
+        }
 
-                // Register heart rate sensor listener
-                sensorManager.registerListener(this@AccelerometerService, heartRate, HEART_RATE_RATE)
+        val notification = NotificationCompat.Builder(this, channelId)
+            .setContentTitle("My Service")
+            .setContentText("Running in the background")
+            .setSmallIcon(R.drawable.ic_notification)
+            .setContentIntent(pendingIntent)
+            .build()
 
-                handler.postDelayed(this, 20) // 50 Hz
-            }
-        })
+        startForeground(1, notification)
+
+        // Your code to perform the service task goes here...
 
         return START_STICKY
     }
 
     override fun onDestroy() {
         super.onDestroy()
-        handlerThread.quitSafely()
         sensorManager.unregisterListener(this)
     }
 
@@ -88,6 +97,11 @@ class AccelerometerService : Service(), SensorEventListener {
             val x = event.values[0]
             val y = event.values[1]
             val z = event.values[2]
+            val values = event.values.clone()
+            accelerometerData.add(values)
+            val size = accelerometerData.size
+            accelerometerData.clear()
+
             // Do something with the accelerometer data (e.g. send to server)
             val topic = "stream-ts-epoch"
             val timestamp = System.currentTimeMillis()
