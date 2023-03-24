@@ -21,7 +21,6 @@ class AccelerometerService : Service(), SensorEventListener {
     private lateinit var gyroscope: Sensor
     private lateinit var heartRate: Sensor
     private lateinit var mqttClient: MqttClient
-    private val accelerometerData = mutableListOf<FloatArray>()
     private var lastUpdate: Long = 0
     private var lastHrUpdate: Long = 0
 
@@ -97,11 +96,6 @@ class AccelerometerService : Service(), SensorEventListener {
             val x = event.values[0]
             val y = event.values[1]
             val z = event.values[2]
-            val values = event.values.clone()
-            accelerometerData.add(values)
-            val size = accelerometerData.size
-            accelerometerData.clear()
-
             // Do something with the accelerometer data (e.g. send to server)
             val topic = "stream-ts-epoch"
             val timestamp = System.currentTimeMillis()
